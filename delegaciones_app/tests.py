@@ -69,3 +69,9 @@ class SGRMVPTests(TestCase):
 		periodo = PeriodoMedicion(nombre='Inválido', inicio=date(2026, 9, 30), termino=date(2026, 9, 1))
 		with self.assertRaises(ValidationError):
 			periodo.full_clean()
+
+	def test_logout_invalida_la_sesion(self):
+		self.client.force_login(self.funcionario)
+		response = self.client.post(reverse('logout'))
+		self.assertRedirects(response, reverse('inicio'))
+		self.assertFalse('_auth_user_id' in self.client.session)
