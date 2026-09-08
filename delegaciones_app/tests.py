@@ -4,7 +4,9 @@ from django.contrib.auth.models import User
 from django.test import TestCase
 from django.urls import reverse
 
-from .models import Actividad, Auditoria, Delegacion, PerfilUsuario
+from django.core.exceptions import ValidationError
+
+from .models import Actividad, Auditoria, Compromiso, Delegacion, HistorialCompromiso, MetaMedicion, PerfilUsuario, PeriodoMedicion
 
 
 class SGRMVPTests(TestCase):
@@ -43,3 +45,27 @@ class SGRMVPTests(TestCase):
 		response = self.client.get(reverse('actividades'))
 		self.assertContains(response, 'EVD-TEST-1')
 		self.assertNotContains(response, 'EVD-TEST-2')
+
+	def test_compromiso_persistente_y_cambio_de_estado_auditado(self):
+		self.client.force_login(self.funcionario)
+		response = self.client.post(reverse('compromiso_nuevo'), {'delegacion': self.delegacion.pk, 'responsable': self.funcionario.pk, 'solicitante': 'Organizacion demo', 'territorio': 'Centro', 'descripcion': 'Compromiso de prueba', 'fecha_comprometida': '2026-09-30', 'estado': 'pendiente', 'observacion': ''})
+		self.assertRedirects(response, reverse('agenda'))
+		compromiso = Compromiso.objects.get(descripcion='Compromiso de prueba')
+		self.assertContains(self.client.get(reverse('agenda')), compromiso.folio)
+		self.client.post(reverse('compromiso_estado', args=[compromiso.pk, 'realizado']))
+		compromiso.refresh_from_db()
+		self.assertEqual(compromiso.estado, 'realizado')
+		self.assertEqual(HistorialCompromiso.objects.filter(compromiso=compromiso).count(), 2)
+
+	def test_meta_cuenta_solo_actividades_aprobadas(self):
+		MetaMedicion.objects.create(delegacion=self.delegacion, nombre='Item', objetivo=2, periodo_inicio=date(2026, 9, 1), periodo_termino=date(2026, 9, 30), ponderador=100)
+		Actividad.objects.create(codigo='EVD-APPROVED', funcionario=self.funcionario, delegacion=self.delegacion, fecha=date(2026, 9, 2), tipo_atencion='Solicitud', descripcion='Aprobada', accion='Accion', item_medicion='Item', estado='aprobada')
+		Actividad.objects.create(codigo='EVD-PENDING', funcionario=self.funcionario, delegacion=self.delegacion, fecha=date(2026, 9, 2), tipo_atencion='Solicitud', descripcion='Pendiente', accion='Accion', item_medicion='Item', estado='pendiente')
+		meta = MetaMedicion.objects.get(nombre='Item')
+		self.assertEqual(meta.avance_calculado, 1)
+		self.assertEqual(meta.cumplimiento, 50)
+
+	def test_periodo_rechaza_termino_anterior(self):
+		periodo = PeriodoMedicion(nombre='Inválido', inicio=date(2026, 9, 30), termino=date(2026, 9, 1))
+		with self.assertRaises(ValidationError):
+			periodo.full_clean()

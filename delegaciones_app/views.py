@@ -8,9 +8,10 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
 from .forms import ActividadForm, CompromisoForm, DelegacionForm, EvidenciaForm
-from .models import Actividad, Auditoria, Compromiso, Delegacion, PerfilUsuario
+from .models import Actividad, Auditoria, Compromiso, Delegacion, HistorialCompromiso, PerfilUsuario
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / 'data'
@@ -70,11 +71,12 @@ def index(request):
     solicitudes_data = _load_json('solicitudes.json').get('solicitudes', [])
     metas = _load_json('metas_delegaciones.json').get('delegaciones', [])
     delegaciones = list(Delegacion.objects.filter(activa=True).values_list('nombre', flat=True)) or delegaciones
+    alertas = sum(1 for item in solicitudes_data if _calcular_estado(item)[0] == 'Alerta Roja por Vencimiento')
     return render(request, 'delegaciones_app/index.html', {
         'ejes': ejes,
         'delegaciones': delegaciones,
         'total_solicitudes': len(solicitudes_data),
-        'alertas': sum(1 for item in solicitudes_data if item.get('estado') == 'Pendiente'),
+        'alertas': alertas,
         'promedio': round(sum(item.get('cumplimiento', 0) for item in metas) / len(metas), 1) if metas else 0,
     })
 
@@ -117,7 +119,7 @@ def delegacion_detalle(request, nombre):
 def actividad_nueva(request):
     if not request.user.is_authenticated:
         return redirect('login')
-    form = ActividadForm(request.POST or None)
+    form = ActividadForm(request.POST or None, user=request.user)
     if request.method == 'POST' and form.is_valid():
         actividad = form.save(commit=False)
         actividad.funcionario = request.user
@@ -157,6 +159,8 @@ def actividad_detalle(request, codigo):
 
 @login_required
 def revisar_actividad(request, codigo, decision):
+    if request.method != 'POST' or decision not in {'aprobar', 'rechazar'}:
+        return redirect('actividad_detalle', codigo=codigo)
     if not (_puede_ver_todo(request.user) or _perfil(request.user) and _perfil(request.user).rol == 'verificador'):
         return redirect('actividad_detalle', codigo=codigo)
     actividad = get_object_or_404(Actividad, codigo=codigo)
@@ -194,27 +198,64 @@ def delegacion_form(request, pk=None):
 
 @login_required
 def compromiso_nuevo(request):
-    form = CompromisoForm(request.POST or None)
+    perfil = _perfil(request.user)
+    if not (_puede_ver_todo(request.user) or perfil and perfil.rol in {'delegado', 'funcionario'}):
+        return redirect('inicio')
+    form = CompromisoForm(request.POST or None, user=request.user)
     if request.method == 'POST' and form.is_valid():
         compromiso = form.save(commit=False)
+        if perfil and perfil.rol in {'delegado', 'funcionario'}:
+            compromiso.responsable = request.user
         compromiso.folio = f'AGR-{datetime.now():%Y%m%d}-{uuid.uuid4().hex[:5].upper()}'
         compromiso.save()
+        HistorialCompromiso.objects.create(compromiso=compromiso, autor=request.user, estado_anterior='', estado_nuevo=compromiso.estado, observacion='Creación del compromiso')
+        Auditoria.objects.create(usuario=request.user, accion='crear', entidad='Compromiso', identificador=compromiso.folio)
         messages.success(request, f'Compromiso creado con folio {compromiso.folio}.')
         return redirect('agenda')
     return render(request, 'delegaciones_app/compromiso_form.html', {'form': form, 'titulo': 'Nuevo compromiso'})
 
 
+@login_required
+def compromiso_estado(request, pk, estado):
+    if request.method != 'POST' or estado not in {'ingresado', 'pendiente', 'proceso', 'realizado'}:
+        return redirect('agenda')
+    perfil = _perfil(request.user)
+    queryset = Compromiso.objects.all()
+    if perfil and perfil.delegacion_id and not _puede_ver_todo(request.user):
+        queryset = queryset.filter(delegacion=perfil.delegacion)
+    compromiso = get_object_or_404(queryset, pk=pk)
+    anterior = compromiso.estado
+    compromiso.estado = estado
+    compromiso.save(update_fields=['estado'])
+    HistorialCompromiso.objects.create(compromiso=compromiso, autor=request.user, estado_anterior=anterior, estado_nuevo=estado)
+    Auditoria.objects.create(usuario=request.user, accion='cambio_estado', entidad='Compromiso', identificador=compromiso.folio, detalle={'anterior': anterior, 'nuevo': estado})
+    messages.success(request, f'El compromiso {compromiso.folio} cambió a {compromiso.get_estado_display()}.')
+    return redirect('agenda')
+
+
 def agenda(request):
-    data = _load_json('solicitudes.json')
-    compromisos = []
-    for solicitud in data.get('solicitudes', []):
-        solicitud['estado_display'], solicitud['estado_class'] = _calcular_estado(solicitud)
-        compromisos.append(solicitud)
+    perfil = _perfil(request.user) if request.user.is_authenticated else None
+    compromisos = Compromiso.objects.select_related('delegacion', 'responsable').all()
+    if perfil and perfil.delegacion_id and not _puede_ver_todo(request.user):
+        compromisos = compromisos.filter(delegacion=perfil.delegacion)
+    delegacion_id = request.GET.get('delegacion')
+    estado = request.GET.get('estado')
+    if delegacion_id:
+        compromisos = compromisos.filter(delegacion_id=delegacion_id)
+    if estado:
+        compromisos = compromisos.filter(estado=estado)
+    compromisos = list(compromisos)
+    for compromiso in compromisos:
+        compromiso.estado_display = 'Vencido' if compromiso.vencido else compromiso.get_estado_display()
+        compromiso.estado_class = 'danger' if compromiso.vencido else ('success' if compromiso.estado == 'realizado' else 'warning')
     return render(request, 'delegaciones_app/agenda.html', {
         'compromisos': compromisos,
-        'proximos': sum(1 for item in compromisos if item['estado_display'] == 'Pendiente'),
-        'vencidos': sum(1 for item in compromisos if item['estado_display'] == 'Alerta Roja por Vencimiento'),
-        'realizados': sum(1 for item in compromisos if item['estado_display'] == 'Realizado'),
+        'delegaciones_filtro': Delegacion.objects.filter(activa=True),
+        'estado_filtro': estado or '',
+        'delegacion_filtro': delegacion_id or '',
+        'proximos': sum(1 for item in compromisos if item.estado != 'realizado' and not item.vencido),
+        'vencidos': sum(1 for item in compromisos if item.vencido),
+        'realizados': sum(1 for item in compromisos if item.estado == 'realizado'),
     })
 
 

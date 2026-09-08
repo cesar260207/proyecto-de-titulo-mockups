@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.core.validators import FileExtensionValidator, MinValueValidator
 from django.db import models
+from django.core.exceptions import ValidationError
 
 
 class Delegacion(models.Model):
@@ -34,6 +35,44 @@ class PerfilUsuario(models.Model):
 
 	def __str__(self):
 		return f'{self.usuario.get_full_name() or self.usuario.username} - {self.get_rol_display()}'
+
+
+class CatalogoItem(models.Model):
+	CATEGORIAS = [('actividad', 'Actividad'), ('servicio', 'Servicio'), ('atencion', 'Tipo de atención'), ('item', 'Ítem de medición')]
+	categoria = models.CharField(max_length=20, choices=CATEGORIAS)
+	codigo = models.CharField(max_length=40)
+	nombre = models.CharField(max_length=160)
+	area = models.CharField(max_length=120, blank=True)
+	activo = models.BooleanField(default=True)
+
+	class Meta:
+		constraints = [models.UniqueConstraint(fields=['categoria', 'codigo'], name='catalogo_categoria_codigo_unico')]
+		ordering = ['categoria', 'nombre']
+
+	def __str__(self):
+		return f'{self.get_categoria_display()}: {self.nombre}'
+
+
+class PeriodoMedicion(models.Model):
+	ESTADOS = [('borrador', 'Borrador'), ('abierto', 'Abierto'), ('cerrado', 'Cerrado')]
+	nombre = models.CharField(max_length=120, unique=True)
+	inicio = models.DateField()
+	termino = models.DateField()
+	estado = models.CharField(max_length=20, choices=ESTADOS, default='borrador')
+	version_parametros = models.PositiveIntegerField(default=1)
+	umbral_colectivo = models.DecimalField(max_digits=5, decimal_places=2, default=80)
+	maximo_cumplimiento = models.DecimalField(max_digits=5, decimal_places=2, default=150)
+
+	def clean(self):
+		if self.termino < self.inicio:
+			raise ValidationError('La fecha de término no puede ser anterior al inicio.')
+
+	@property
+	def dias_computables(self):
+		return (self.termino - self.inicio).days + 1
+
+	def __str__(self):
+		return self.nombre
 
 
 class Actividad(models.Model):
@@ -81,6 +120,11 @@ class Compromiso(models.Model):
 	observacion = models.TextField(blank=True)
 	creado = models.DateTimeField(auto_now_add=True)
 
+	@property
+	def vencido(self):
+		from django.utils import timezone
+		return self.estado != 'realizado' and self.fecha_comprometida < timezone.localdate()
+
 
 class MetaMedicion(models.Model):
 	delegacion = models.ForeignKey(Delegacion, on_delete=models.PROTECT, related_name='metas')
@@ -94,8 +138,30 @@ class MetaMedicion(models.Model):
 	activa = models.BooleanField(default=True)
 
 	@property
+	def avance_calculado(self):
+		return self.delegacion.actividades.filter(
+			fecha__range=(self.periodo_inicio, self.periodo_termino),
+			item_medicion=self.nombre,
+			estado='aprobada',
+		).count()
+
+	@property
 	def cumplimiento(self):
-		return min((self.avance / self.objetivo) * 100, float(self.tope_cumplimiento))
+		avance = self.avance_calculado
+		return min((avance / self.objetivo) * 100, float(self.tope_cumplimiento))
+
+	@property
+	def resultado_ponderado(self):
+		return float(self.ponderador) * self.cumplimiento / 100
+
+
+class HistorialCompromiso(models.Model):
+	compromiso = models.ForeignKey(Compromiso, on_delete=models.CASCADE, related_name='historial')
+	autor = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+	estado_anterior = models.CharField(max_length=20)
+	estado_nuevo = models.CharField(max_length=20)
+	observacion = models.TextField(blank=True)
+	fecha = models.DateTimeField(auto_now_add=True)
 
 
 class Auditoria(models.Model):
