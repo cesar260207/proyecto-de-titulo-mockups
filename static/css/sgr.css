@@ -3,8 +3,8 @@
     --muted: #6b7d86;
     --paper: #f4f7f6;
     --panel: #ffffff;
-    --teal: #b52b1f;
-    --teal-dark: #8f1f18;
+    --teal: #b51f1f;
+    --teal-dark: #861717;
     --coral: #d45a3e;
     --amber: #e8a128;
     --line: #e4d4d1;
@@ -17,7 +17,7 @@ body {
     font-family: "Trebuchet MS", "Segoe UI", sans-serif;
 }
 
-.sgr-nav { background: var(--navy); min-height: 72px; box-shadow: 0 8px 24px rgba(75, 29, 36, .18); }
+.sgr-nav { background: #991b1b !important; min-height: 72px; box-shadow: 0 8px 24px rgba(153, 27, 27, .22); }
 .navbar-brand { letter-spacing: .02em; }
 .navbar-brand small { display: block; color: #e9b9b2; font-size: .68rem; font-weight: 400; letter-spacing: .08em; text-transform: uppercase; }
 .nav-link { color: #f5dfdc !important; font-size: .92rem; }
@@ -50,7 +50,7 @@ body {
 .table { --bs-table-bg: transparent; }
 .table thead th { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; border-bottom: 2px solid var(--line); }
 .table tbody td { border-color: #f1e7e5; vertical-align: middle; }
-.hero-sgr { background: linear-gradient(115deg, #4b1d24 0%, #9f2b25 58%, #d66a44 150%); color: #fff; padding: 2.4rem; border-radius: 12px; overflow: hidden; position: relative; }
+.hero-sgr { background: linear-gradient(115deg, #6f1111 0%, #b51f1f 58%, #d45a3e 150%); color: #fff; padding: 2.4rem; border-radius: 12px; overflow: hidden; position: relative; }
 .hero-sgr:after { content: ""; position: absolute; width: 260px; height: 260px; border: 1px solid rgba(255,255,255,.2); border-radius: 50%; right: 8%; top: -80px; box-shadow: 0 0 0 24px rgba(255,255,255,.04), 0 0 0 48px rgba(255,255,255,.03); }
 .hero-sgr h1 { max-width: 720px; font-weight: 800; letter-spacing: -.04em; }
 .hero-sgr p { max-width: 700px; color: #f7dfdb; }
