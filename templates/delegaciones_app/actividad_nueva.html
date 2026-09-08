@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}Registrar actividad | SGR{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-end flex-wrap gap-3 mb-4">
+    <div><div class="page-kicker">EP-01 · HU-01 · HU-09</div><h1 class="page-title mb-2">Registrar actividad</h1><p class="page-intro mb-0">Registra una gestión territorial, vincúlala a un ítem de medición y deja lista su evidencia para revisión.</p></div>
+    <a href="{% url 'agenda' %}" class="btn btn-outline-sgr">Ver agenda colectiva</a>
+</div>
+<div class="row g-4">
+    <div class="col-xl-8">
+        <div class="panel">
+            <div class="section-label mb-3">1. Datos de la gestión</div>
+            <form>
+                <div class="row g-3">
+                    <div class="col-md-4"><label class="form-label" for="fecha">Fecha de actividad *</label><input id="fecha" class="form-control" type="date" value="2026-09-07"></div>
+                    <div class="col-md-4"><label class="form-label" for="delegacion">Delegación *</label><select id="delegacion" class="form-select"><option>Centro</option><option>Rural</option><option>La Antena</option><option>La Pampa</option><option>Avenida del Mar</option><option>Las Compañías</option></select></div>
+                    <div class="col-md-4"><label class="form-label" for="servicio">Tipo de atención *</label><select id="servicio" class="form-select">{% for servicio in servicios %}<option>{{ servicio }}</option>{% endfor %}</select></div>
+                    <div class="col-12"><label class="form-label" for="descripcion">Actividad, solicitud o problema atendido *</label><textarea id="descripcion" class="form-control" rows="3" placeholder="Describe el requerimiento territorial y su contexto..."></textarea></div>
+                    <div class="col-12"><label class="form-label" for="accion">Acción ejecutada *</label><textarea id="accion" class="form-control" rows="3" placeholder="Indica qué se realizó, coordinó o derivó..."></textarea></div>
+                    <div class="col-md-7"><label class="form-label" for="contacto">Contacto o referencia</label><input id="contacto" class="form-control" placeholder="Nombre, organización o referencia"></div>
+                    <div class="col-md-5"><label class="form-label" for="telefono">Teléfono</label><input id="telefono" class="form-control" placeholder="+56 9 0000 0000"></div>
+                </div>
+                <hr class="my-4">
+                <div class="section-label mb-3">2. Clasificación y medición</div>
+                <div class="row g-3">
+                    <div class="col-md-7"><label class="form-label" for="item">Ítem medible *</label><select id="item" class="form-select">{% for item in items %}<option>{{ item }}</option>{% endfor %}</select></div>
+                    <div class="col-md-5"><label class="form-label" for="agenda">¿Ingresa a agenda?</label><select id="agenda" class="form-select"><option>Sí, crear compromiso</option><option>No</option></select></div>
+                    <div class="col-12"><label class="form-label" for="observacion">Observación para el equipo</label><input id="observacion" class="form-control" placeholder="Información útil para seguimiento o coordinación"></div>
+                </div>
+                <div class="d-flex justify-content-end gap-2 mt-4"><button type="button" class="btn btn-light">Limpiar</button><button type="button" class="btn btn-sgr">Guardar actividad y generar código</button></div>
+            </form>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="panel mb-4">
+            <div class="section-label mb-2">3. Evidencia verificable</div>
+            <h2 class="h5">Código generado al guardar</h2>
+            <div class="display-6 fw-bold text-primary mb-3">{{ codigo_ejemplo }}</div>
+            <p class="small text-muted">El código es único e inmutable. Úsalo para nombrar la fotografía o archivo que respalda la actividad.</p>
+            <label class="form-label" for="evidencia">Archivo de evidencia</label><input id="evidencia" type="file" class="form-control mb-2"><small class="text-muted">Formatos permitidos: JPG, PNG, PDF · Máximo 10 MB</small>
+            <div class="alert alert-warning-soft mt-3 mb-0"><strong>Pendiente de revisión</strong><br><small>Un verificador deberá aprobar la evidencia para que aporte al avance.</small></div>
+        </div>
+        <div class="panel"><div class="section-label mb-2">Validación</div><div class="d-flex justify-content-between mb-2"><span>Estado del registro</span><span class="badge badge-soft">Borrador</span></div><div class="d-flex justify-content-between"><span>Aporte a la meta</span><strong>0 hasta aprobación</strong></div></div>
+    </div>
+</div>
+{% endblock %}

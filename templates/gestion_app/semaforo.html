@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+
+{% block title %}Semáforo de Metas | Municipalidad de La Serena{% endblock %}
+
+{% block content %}
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body">
+        <h2 class="mb-2">Semáforo de desempeño territorial</h2>
+        <p class="text-muted mb-0">Indicadores visuales de cumplimiento trimestral por delegación.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    {% for delegacion in delegaciones %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5>{{ delegacion.nombre }}</h5>
+                    <span class="badge bg-{{ delegacion.estado_class }} rounded-pill">{{ delegacion.estado }}</span>
+                </div>
+                <div class="alert alert-{{ delegacion.estado_class }} mb-3">
+                    Cumplimiento: {{ delegacion.cumplimiento }}%<br>
+                    Fecha de último registro: {{ delegacion.ultimos_datos }}
+                </div>
+                <p class="small text-muted mb-0">Días transcurridos desde el último registro: {{ delegacion.dias_desde_registro }}</p>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endblock %}
